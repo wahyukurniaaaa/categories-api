@@ -2,6 +2,7 @@ package main
 
 import (
 	"category-api/handlers"
+	"os"
 
 	"github.com/gin-gonic/gin"
 )
@@ -27,5 +28,9 @@ func main() {
 	r.DELETE("/categories/:id", categoryHandler.DeleteCategory)
 
 	// Run the server
-	r.Run(":8080")
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
+	}
+	r.Run(":" + port)
 }
