@@ -2,35 +2,47 @@ package main
 
 import (
 	"category-api/handlers"
+	"fmt"
+	"net/http"
 	"os"
-
-	"github.com/gin-gonic/gin"
 )
 
 func main() {
-	r := gin.Default()
-
+	// Initialize Category Handler
 	categoryHandler := handlers.NewCategoryHandler()
 
-	// 🔗 Endpoint yang Wajib Ada
-	// GET / → Halaman Dokumentasi & Data
-	r.GET("/", categoryHandler.ShowHome)
+	// Handler untuk /api/categories (handles GET, POST) dan /api/categories/ (handles ID operations)
+	http.HandleFunc("/api/categories", categoryHandler.ServeHTTP)
+	http.HandleFunc("/api/categories/", categoryHandler.ServeHTTP)
 
-	// GET /categories → Ambil semua kategori
-	r.GET("/categories", categoryHandler.GetAllCategories)
-	// POST /categories → Tambah kategori
-	r.POST("/categories", categoryHandler.CreateCategory)
-	// GET /categories/{id} → Ambil detail satu kategori
-	r.GET("/categories/:id", categoryHandler.GetCategoryByID)
-	// PUT /categories/{id} → Update kategori
-	r.PUT("/categories/:id", categoryHandler.UpdateCategory)
-	// DELETE /categories/{id} → Hapus kategori
-	r.DELETE("/categories/:id", categoryHandler.DeleteCategory)
+	// Handler untuk /api/produk
+	http.HandleFunc("/api/produk", handlers.ProdukHandler)
+	http.HandleFunc("/api/produk/", handlers.ProdukHandler)
+
+	// Handler untuk Health Check
+	http.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Write([]byte(`{"status": "OK", "message": "API Running"}`))
+	})
+	
+	// Handler untuk Root / (Documentation link or simple message)
+	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/" {
+			http.NotFound(w, r)
+			return
+		}
+		w.Write([]byte(`Welcome to Kasir API. Endpoints: /api/produk, /api/categories`))
+	})
 
 	// Run the server
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8080"
 	}
-	r.Run(":" + port)
+	
+	fmt.Printf("Server starting on port %s...\n", port)
+	if err := http.ListenAndServe(":"+port, nil); err != nil {
+		fmt.Printf("Failed to start server: %v\n", err)
+	}
 }

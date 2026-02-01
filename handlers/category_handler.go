@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"strings"
 	"sync"
 
-	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 )
 
@@ -33,14 +33,12 @@ func (h *CategoryHandler) loadFromFile() {
 	file, err := os.ReadFile(h.filename)
 	if err != nil {
 		if os.IsNotExist(err) {
-			// If file doesn't exist, start with empty map
 			return
 		}
 		fmt.Printf("Error reading file: %v\n", err)
 		return
 	}
 
-	// If file is empty, do nothing
 	if len(file) == 0 {
 		return
 	}
@@ -60,83 +58,46 @@ func (h *CategoryHandler) saveToFile() error {
 	return os.WriteFile(h.filename, data, 0644)
 }
 
-// GET /
-func (h *CategoryHandler) ShowHome(c *gin.Context) {
-	h.mutex.RLock()
-	defer h.mutex.RUnlock()
-
-	var categoriesHTML string
-	if len(h.categories) == 0 {
-		categoriesHTML = "<p><i>No categories available. Use POST /categories to add data.</i></p>"
-	} else {
-		categoriesHTML = "<ul style='padding-left: 20px;'>"
-		for _, cat := range h.categories {
-			categoriesHTML += fmt.Sprintf("<li style='margin-bottom: 8px;'><strong>%s</strong> (ID: <code style='background:#eee;padding:2px 4px;border-radius:3px;'>%s</code>)<br><span style='color:#666;'>%s</span></li>", cat.Name, cat.ID, cat.Description)
+// ServeHTTP implements the routing logic for Categories
+func (h *CategoryHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	// Handle /api/categories
+	if r.URL.Path == "/api/categories" {
+		switch r.Method {
+		case http.MethodGet:
+			h.getAllCategories(w, r)
+		case http.MethodPost:
+			h.createCategory(w, r)
+		default:
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}
-		categoriesHTML += "</ul>"
+		return
 	}
 
-	html := fmt.Sprintf(`
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Category API Docs</title>
-    <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; line-height: 1.6; color: #333; max-width: 800px; margin: 0 auto; padding: 20px; background-color: #f4f4f9; }
-        h1 { color: #2c3e50; border-bottom: 2px solid #3498db; padding-bottom: 10px; display: flex; align-items: center; gap: 10px; }
-        h2 { color: #34495e; margin-top: 30px; border-left: 4px solid #3498db; padding-left: 10px; }
-        .endpoint { background: #fff; padding: 15px; border-radius: 8px; margin-bottom: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); transition: transform 0.2s; border: 1px solid #eee; }
-        .endpoint:hover { transform: translateY(-2px); box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
-        .method { display: inline-block; padding: 4px 8px; border-radius: 4px; color: #fff; font-weight: bold; font-size: 0.85em; width: 60px; text-align: center; text-transform: uppercase; }
-        .get { background-color: #3498db; }
-        .post { background-color: #2ecc71; }
-        .put { background-color: #f39c12; }
-        .delete { background-color: #e74c3c; }
-        .url { font-family: 'Consolas', 'Monaco', monospace; font-weight: bold; margin-left: 10px; color: #333; font-size: 1.05em; }
-        .desc { margin-left: 10px; color: #7f8c8d; font-style: italic; }
-        .data-section { background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); border: 1px solid #eee; }
-        code { font-family: 'Consolas', 'Monaco', monospace; background: #e8f4f8; padding: 2px 5px; border-radius: 3px; color: #c0392b; }
-    </style>
-</head>
-<body>
-    <h1>📂 Category API Documentation</h1>
-    <p>Welcome to the <strong>Category API</strong>. Below are the available endpoints to manage your data.</p>
-    
-    <div class="endpoint">
-        <span class="method get">GET</span> <span class="url">/categories</span> <span class="desc">Retrieve all categories</span>
-    </div>
-    <div class="endpoint">
-        <span class="method post">POST</span> <span class="url">/categories</span> <span class="desc">Create a new category (JSON Body: <code>name</code>, <code>description</code>)</span>
-    </div>
-    <div class="endpoint">
-        <span class="method get">GET</span> <span class="url">/categories/:id</span> <span class="desc">Get details of a specific category</span>
-    </div>
-    <div class="endpoint">
-        <span class="method put">PUT</span> <span class="url">/categories/:id</span> <span class="desc">Update a category (JSON Body: <code>name</code>, <code>description</code>)</span>
-    </div>
-    <div class="endpoint">
-        <span class="method delete">DELETE</span> <span class="url">/categories/:id</span> <span class="desc">Remove a category</span>
-    </div>
+	// Handle /api/categories/{id}
+	if strings.HasPrefix(r.URL.Path, "/api/categories/") {
+		id := strings.TrimPrefix(r.URL.Path, "/api/categories/")
+		if id == "" {
+			http.Error(w, "Invalid ID", http.StatusBadRequest)
+			return
+		}
 
-    <h2>📊 Live Data: Categories</h2>
-    <div class="data-section">
-        %s
-    </div>
-    
-    <footer style="margin-top: 40px; text-align: center; color: #aaa; font-size: 0.9em;">
-        Category API v1.0 &bull; Running with Gin Framework
-    </footer>
-</body>
-</html>
-`, categoriesHTML)
-
-	c.Data(http.StatusOK, "text/html; charset=utf-8", []byte(html))
+		switch r.Method {
+		case http.MethodGet:
+			h.getCategoryByID(w, r, id)
+		case http.MethodPut:
+			h.updateCategory(w, r, id)
+		case http.MethodDelete:
+			h.deleteCategory(w, r, id)
+		default:
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+		return
+	}
+	
+	http.NotFound(w, r)
 }
 
-// GET /categories
-func (h *CategoryHandler) GetAllCategories(c *gin.Context) {
+func (h *CategoryHandler) getAllCategories(w http.ResponseWriter, r *http.Request) {
 	h.mutex.RLock()
 	defer h.mutex.RUnlock()
 
@@ -145,32 +106,35 @@ func (h *CategoryHandler) GetAllCategories(c *gin.Context) {
 		categories = append(categories, cat)
 	}
 
-	c.JSON(http.StatusOK, categories)
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(categories)
 }
 
-// GET /categories/:id
-func (h *CategoryHandler) GetCategoryByID(c *gin.Context) {
-	id := c.Param("id")
-
+func (h *CategoryHandler) getCategoryByID(w http.ResponseWriter, r *http.Request, id string) {
 	h.mutex.RLock()
 	defer h.mutex.RUnlock()
 
 	if category, exists := h.categories[id]; exists {
-		c.JSON(http.StatusOK, category)
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(category)
 	} else {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Category not found"})
+		http.Error(w, `{"error": "Category not found"}`, http.StatusNotFound)
 	}
 }
 
-// POST /categories
-func (h *CategoryHandler) CreateCategory(c *gin.Context) {
+func (h *CategoryHandler) createCategory(w http.ResponseWriter, r *http.Request) {
 	var input struct {
-		Name        string `json:"name" binding:"required"`
+		Name        string `json:"name"`
 		Description string `json:"description"`
 	}
 
-	if err := c.ShouldBindJSON(&input); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+		http.Error(w, `{"error": "Invalid request body"}`, http.StatusBadRequest)
+		return
+	}
+	
+	if input.Name == "" {
+		http.Error(w, `{"error": "Name is required"}`, http.StatusBadRequest)
 		return
 	}
 
@@ -182,26 +146,29 @@ func (h *CategoryHandler) CreateCategory(c *gin.Context) {
 
 	h.mutex.Lock()
 	h.categories[newCategory.ID] = newCategory
-	// Save to file
 	if err := h.saveToFile(); err != nil {
 		fmt.Printf("Error saving to file: %v\n", err)
 	}
 	h.mutex.Unlock()
 
-	c.JSON(http.StatusCreated, newCategory)
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(newCategory)
 }
 
-// PUT /categories/:id
-func (h *CategoryHandler) UpdateCategory(c *gin.Context) {
-	id := c.Param("id")
-
+func (h *CategoryHandler) updateCategory(w http.ResponseWriter, r *http.Request, id string) {
 	var input struct {
-		Name        string `json:"name" binding:"required"`
+		Name        string `json:"name"`
 		Description string `json:"description"`
 	}
 
-	if err := c.ShouldBindJSON(&input); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+		http.Error(w, `{"error": "Invalid request body"}`, http.StatusBadRequest)
+		return
+	}
+	
+	if input.Name == "" {
+		http.Error(w, `{"error": "Name is required"}`, http.StatusBadRequest)
 		return
 	}
 
@@ -209,7 +176,7 @@ func (h *CategoryHandler) UpdateCategory(c *gin.Context) {
 	defer h.mutex.Unlock()
 
 	if _, exists := h.categories[id]; !exists {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Category not found"})
+		http.Error(w, `{"error": "Category not found"}`, http.StatusNotFound)
 		return
 	}
 
@@ -220,32 +187,30 @@ func (h *CategoryHandler) UpdateCategory(c *gin.Context) {
 	}
 	h.categories[id] = updatedCategory
 
-	// Save to file
 	if err := h.saveToFile(); err != nil {
 		fmt.Printf("Error saving to file: %v\n", err)
 	}
 
-	c.JSON(http.StatusOK, updatedCategory)
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(updatedCategory)
 }
 
-// DELETE /categories/:id
-func (h *CategoryHandler) DeleteCategory(c *gin.Context) {
-	id := c.Param("id")
-
+func (h *CategoryHandler) deleteCategory(w http.ResponseWriter, r *http.Request, id string) {
 	h.mutex.Lock()
 	defer h.mutex.Unlock()
 
 	if _, exists := h.categories[id]; !exists {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Category not found"})
+		http.Error(w, `{"error": "Category not found"}`, http.StatusNotFound)
 		return
 	}
 
 	delete(h.categories, id)
 
-	// Save to file
 	if err := h.saveToFile(); err != nil {
 		fmt.Printf("Error saving to file: %v\n", err)
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "Category deleted successfully"})
+	w.Header().Set("Content-Type", "application/json")
+	w.Write([]byte(`{"message": "Category deleted successfully"}`))
 }
+
