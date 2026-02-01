@@ -2,60 +2,18 @@ package handlers
 
 import (
 	"category-api/models"
+	"category-api/services"
 	"encoding/json"
-	"fmt"
 	"net/http"
-	"os"
 	"strings"
-	"sync"
-
-	"github.com/google/uuid"
 )
 
-const CategoryFile = "categories.json"
-
 type CategoryHandler struct {
-	categories map[string]models.Category
-	mutex      sync.RWMutex
-	filename   string
+	service services.CategoryService
 }
 
-func NewCategoryHandler() *CategoryHandler {
-	h := &CategoryHandler{
-		categories: make(map[string]models.Category),
-		filename:   CategoryFile,
-	}
-	h.loadFromFile()
-	return h
-}
-
-func (h *CategoryHandler) loadFromFile() {
-	file, err := os.ReadFile(h.filename)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return
-		}
-		fmt.Printf("Error reading file: %v\n", err)
-		return
-	}
-
-	if len(file) == 0 {
-		return
-	}
-
-	h.mutex.Lock()
-	defer h.mutex.Unlock()
-	if err := json.Unmarshal(file, &h.categories); err != nil {
-		fmt.Printf("Error parsing JSON: %v\n", err)
-	}
-}
-
-func (h *CategoryHandler) saveToFile() error {
-	data, err := json.MarshalIndent(h.categories, "", "  ")
-	if err != nil {
-		return err
-	}
-	return os.WriteFile(h.filename, data, 0644)
+func NewCategoryHandler(service services.CategoryService) *CategoryHandler {
+	return &CategoryHandler{service}
 }
 
 // ServeHTTP implements the routing logic for Categories
@@ -93,17 +51,15 @@ func (h *CategoryHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
-	
+
 	http.NotFound(w, r)
 }
 
 func (h *CategoryHandler) getAllCategories(w http.ResponseWriter, r *http.Request) {
-	h.mutex.RLock()
-	defer h.mutex.RUnlock()
-
-	categories := make([]models.Category, 0, len(h.categories))
-	for _, cat := range h.categories {
-		categories = append(categories, cat)
+	categories, err := h.service.GetAll()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -111,45 +67,33 @@ func (h *CategoryHandler) getAllCategories(w http.ResponseWriter, r *http.Reques
 }
 
 func (h *CategoryHandler) getCategoryByID(w http.ResponseWriter, r *http.Request, id string) {
-	h.mutex.RLock()
-	defer h.mutex.RUnlock()
-
-	if category, exists := h.categories[id]; exists {
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(category)
-	} else {
+	category, err := h.service.GetByID(id)
+	if err != nil {
 		http.Error(w, `{"error": "Category not found"}`, http.StatusNotFound)
+		return
 	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(category)
 }
 
 func (h *CategoryHandler) createCategory(w http.ResponseWriter, r *http.Request) {
-	var input struct {
-		Name        string `json:"name"`
-		Description string `json:"description"`
-	}
+	var input models.Category
 
 	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
 		http.Error(w, `{"error": "Invalid request body"}`, http.StatusBadRequest)
 		return
 	}
-	
+
 	if input.Name == "" {
 		http.Error(w, `{"error": "Name is required"}`, http.StatusBadRequest)
 		return
 	}
 
-	newCategory := models.Category{
-		ID:          uuid.New().String(),
-		Name:        input.Name,
-		Description: input.Description,
+	newCategory, err := h.service.Create(input)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
 	}
-
-	h.mutex.Lock()
-	h.categories[newCategory.ID] = newCategory
-	if err := h.saveToFile(); err != nil {
-		fmt.Printf("Error saving to file: %v\n", err)
-	}
-	h.mutex.Unlock()
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
@@ -157,38 +101,22 @@ func (h *CategoryHandler) createCategory(w http.ResponseWriter, r *http.Request)
 }
 
 func (h *CategoryHandler) updateCategory(w http.ResponseWriter, r *http.Request, id string) {
-	var input struct {
-		Name        string `json:"name"`
-		Description string `json:"description"`
-	}
+	var input models.Category
 
 	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
 		http.Error(w, `{"error": "Invalid request body"}`, http.StatusBadRequest)
 		return
 	}
-	
+
 	if input.Name == "" {
 		http.Error(w, `{"error": "Name is required"}`, http.StatusBadRequest)
 		return
 	}
 
-	h.mutex.Lock()
-	defer h.mutex.Unlock()
-
-	if _, exists := h.categories[id]; !exists {
-		http.Error(w, `{"error": "Category not found"}`, http.StatusNotFound)
+	updatedCategory, err := h.service.Update(id, input)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
-	}
-
-	updatedCategory := models.Category{
-		ID:          id,
-		Name:        input.Name,
-		Description: input.Description,
-	}
-	h.categories[id] = updatedCategory
-
-	if err := h.saveToFile(); err != nil {
-		fmt.Printf("Error saving to file: %v\n", err)
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -196,21 +124,11 @@ func (h *CategoryHandler) updateCategory(w http.ResponseWriter, r *http.Request,
 }
 
 func (h *CategoryHandler) deleteCategory(w http.ResponseWriter, r *http.Request, id string) {
-	h.mutex.Lock()
-	defer h.mutex.Unlock()
-
-	if _, exists := h.categories[id]; !exists {
-		http.Error(w, `{"error": "Category not found"}`, http.StatusNotFound)
+	if err := h.service.Delete(id); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
-	}
-
-	delete(h.categories, id)
-
-	if err := h.saveToFile(); err != nil {
-		fmt.Printf("Error saving to file: %v\n", err)
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	w.Write([]byte(`{"message": "Category deleted successfully"}`))
 }
-

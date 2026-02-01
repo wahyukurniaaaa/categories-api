@@ -1,48 +1,89 @@
 package main
 
 import (
-	"category-api/handlers"
-	"fmt"
+	"database/sql"
+	"log"
 	"net/http"
-	"os"
+	"category-api/config"
+	"category-api/database"
+	"category-api/handlers"
+	"category-api/repositories"
+	"category-api/services"
 )
 
 func main() {
-	// Initialize Category Handler
-	categoryHandler := handlers.NewCategoryHandler()
+	// 1. Load Config
+	cfg := config.LoadConfig()
 
-	// Handler untuk /api/categories (handles GET, POST) dan /api/categories/ (handles ID operations)
+	// 2. Connect Database
+	db := database.InitDB(cfg)
+	defer db.Close()
+	
+	// Create Tables
+	createTables(db)
+
+	// 3. Init Layers (Dependency Injection)
+	// Repositories
+	productRepo := repositories.NewProductRepository(db)
+	categoryRepo := repositories.NewCategoryRepository(db)
+
+	// Services
+	productService := services.NewProductService(productRepo)
+	categoryService := services.NewCategoryService(categoryRepo)
+
+	// Handlers
+	productHandler := handlers.NewProductHandler(productService)
+	categoryHandler := handlers.NewCategoryHandler(categoryService)
+
+	// 4. Setup Routing
 	http.HandleFunc("/api/categories", categoryHandler.ServeHTTP)
 	http.HandleFunc("/api/categories/", categoryHandler.ServeHTTP)
 
-	// Handler untuk /api/produk
-	http.HandleFunc("/api/produk", handlers.ProdukHandler)
-	http.HandleFunc("/api/produk/", handlers.ProdukHandler)
+	http.HandleFunc("/api/produk", productHandler.ServeHTTP)
+	http.HandleFunc("/api/produk/", productHandler.ServeHTTP)
 
-	// Handler untuk Health Check
+	// Health Check
 	http.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Write([]byte(`{"status": "OK", "message": "API Running"}`))
+		w.Write([]byte(`{"status": "OK", "message": "API Running with DB"}`))
 	})
 	
-	// Handler untuk Root / (Documentation link or simple message)
+	// Root
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/" {
 			http.NotFound(w, r)
 			return
 		}
-		w.Write([]byte(`Welcome to Kasir API. Endpoints: /api/produk, /api/categories`))
+		w.Write([]byte(`Welcome to Kasir API (Layered Architecture).`))
 	})
 
-	// Run the server
-	port := os.Getenv("PORT")
-	if port == "" {
-		port = "8080"
-	}
-	
-	fmt.Printf("Server starting on port %s...\n", port)
-	if err := http.ListenAndServe(":"+port, nil); err != nil {
-		fmt.Printf("Failed to start server: %v\n", err)
+	// Run Server
+	log.Printf("Server starting on port %s...", cfg.AppPort)
+	if err := http.ListenAndServe(":"+cfg.AppPort, nil); err != nil {
+		log.Fatalf("Failed to start server: %v", err)
 	}
 }
+
+func createTables(db *sql.DB) {
+	queries := []string{
+		`CREATE TABLE IF NOT EXISTS categories (
+			id VARCHAR(50) PRIMARY KEY,
+			name VARCHAR(100) NOT NULL,
+			description TEXT
+		);`,
+		`CREATE TABLE IF NOT EXISTS products (
+			id SERIAL PRIMARY KEY,
+			nama VARCHAR(100) NOT NULL,
+			harga INT NOT NULL,
+			stok INT NOT NULL
+		);`,
+	}
+
+	for _, query := range queries {
+		if _, err := db.Exec(query); err != nil {
+			log.Fatalf("Failed to create table: %v", err)
+		}
+	}
+	log.Println("Database tables initialized")
+}
+

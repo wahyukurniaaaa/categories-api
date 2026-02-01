@@ -21,3 +21,4 @@ go.work
 
 # Mac
 .DS_Store
+.env
