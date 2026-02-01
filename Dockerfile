@@ -1,5 +1,5 @@
-# Build stage
-FROM golang:1.23-alpine AS builder
+# Build stage - use latest Go
+FROM golang:alpine AS builder
 
 WORKDIR /app
 
