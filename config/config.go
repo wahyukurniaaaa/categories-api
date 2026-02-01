@@ -28,6 +28,14 @@ func LoadConfig() *Config {
 	if err := viper.BindEnv("PORT"); err != nil {
 		log.Println("Failed to bind PORT env var")
 	}
+	
+	// Explicitly bind DB keys to ensure environment variables are picked up
+	viper.BindEnv("DB_CONN")
+	viper.BindEnv("DB_HOST")
+	viper.BindEnv("DB_PORT")
+	viper.BindEnv("DB_USER")
+	viper.BindEnv("DB_PASSWORD")
+	viper.BindEnv("DB_NAME")
 
 	var config Config
 	if err := viper.Unmarshal(&config); err != nil {
