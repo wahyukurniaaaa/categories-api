@@ -54,8 +54,30 @@ func InitDB(cfg *config.Config) *sql.DB {
 		if cfg.DBHost != "localhost" && cfg.DBHost != "127.0.0.1" {
 			sslMode = "require"
 		}
-		dsn = fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=%s",
-			cfg.DBHost, cfg.DBPort, cfg.DBUser, cfg.DBPassword, cfg.DBName, sslMode)
+		
+		// Try to resolve IPv4 for the host to avoid IPv6 issues on some cloud platforms
+		hostaddr := ""
+		if cfg.DBHost != "localhost" && cfg.DBHost != "127.0.0.1" {
+			ips, err := net.LookupIP(cfg.DBHost)
+			if err == nil {
+				for _, ip := range ips {
+					if ip.To4() != nil {
+						hostaddr = ip.String()
+						log.Printf("Resolved %s to IPv4: %s", cfg.DBHost, hostaddr)
+						break
+					}
+				}
+			}
+		}
+		
+		// Build DSN - use hostaddr if we found IPv4, keeping host for SSL verification
+		if hostaddr != "" {
+			dsn = fmt.Sprintf("host=%s hostaddr=%s port=%s user=%s password=%s dbname=%s sslmode=%s",
+				cfg.DBHost, hostaddr, cfg.DBPort, cfg.DBUser, cfg.DBPassword, cfg.DBName, sslMode)
+		} else {
+			dsn = fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=%s",
+				cfg.DBHost, cfg.DBPort, cfg.DBUser, cfg.DBPassword, cfg.DBName, sslMode)
+		}
 		log.Printf("Using structured DB config (Host: %s)", cfg.DBHost)
 	}
 
