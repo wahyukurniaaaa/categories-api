@@ -4,6 +4,8 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
+	"net"
+	"net/url"
 
 	"category-api/config"
 
@@ -13,13 +15,40 @@ import (
 func InitDB(cfg *config.Config) *sql.DB {
 	var dsn string
 	if cfg.DBConn != "" {
-		dsn = cfg.DBConn
+		// Parse DSN to handle IPv6/IPv4 resolution issues (Render/Supabase specific)
+		parsedURL, err := url.Parse(cfg.DBConn)
+		if err == nil {
+			host := parsedURL.Hostname()
+			// Try to resolve multiple IPs and pick IPv4
+			ips, err := net.LookupIP(host)
+			if err == nil {
+				for _, ip := range ips {
+					if ip.To4() != nil {
+						// Found IPv4, replace hostname with IP
+						log.Printf("Resolved %s to IPv4: %s", host, ip.String())
+						port := parsedURL.Port()
+						if port != "" {
+							parsedURL.Host = fmt.Sprintf("%s:%s", ip.String(), port)
+						} else {
+							parsedURL.Host = ip.String()
+						}
+						// Force DSN to use this new URL
+						dsn = parsedURL.String()
+						break
+					}
+				}
+			}
+		}
+
+		if dsn == "" { // Fallback if parsing failed or no IPv4 found (unlikely)
+			dsn = cfg.DBConn
+		}
 		log.Println("Using DB_CONN from environment variables")
 	} else {
 		if cfg.DBHost == "" {
 			log.Fatal("Database configuration missing: DB_CONN or DB_HOST must be set")
 		}
-		
+
 		// Default SSL mode override for local development vs production
 		sslMode := "disable"
 		if cfg.DBHost != "localhost" && cfg.DBHost != "127.0.0.1" {
