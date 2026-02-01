@@ -24,9 +24,19 @@ func LoadConfig() *Config {
 		log.Println("No .env file found, using system environment variables")
 	}
 
+	// Handle Render's PORT env var
+	if err := viper.BindEnv("PORT"); err != nil {
+		log.Println("Failed to bind PORT env var")
+	}
+
 	var config Config
 	if err := viper.Unmarshal(&config); err != nil {
 		log.Fatalf("Unable to decode into struct, %v", err)
+	}
+
+	// Override AppPort if PORT env var is set (Render)
+	if port := viper.GetString("PORT"); port != "" {
+		config.AppPort = port
 	}
 
 	return &config
