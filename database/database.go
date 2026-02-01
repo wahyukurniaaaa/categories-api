@@ -49,9 +49,11 @@ func InitDB(cfg *config.Config) *sql.DB {
 			log.Fatal("Database configuration missing: DB_CONN or DB_HOST must be set")
 		}
 
-		// Default SSL mode override for local development vs production
-		// TEMPORARY: Testing with disable to diagnose EOF
+		// Default SSL mode - require for remote connections
 		sslMode := "disable"
+		if cfg.DBHost != "localhost" && cfg.DBHost != "127.0.0.1" {
+			sslMode = "require"
+		}
 		
 		// Try to resolve IPv4 for the host to avoid IPv6 issues on some cloud platforms
 		hostaddr := ""
