@@ -10,7 +10,7 @@ type TransactionRepository interface {
 	CreateTransaction(items []models.CheckoutItem, products map[int]models.Produk) (models.Transaction, []models.TransactionDetail, error)
 	GetTodayRevenue() (int, error)
 	GetTodayTransactionCount() (int, error)
-	GetTodayBestSellingProduct() (string, error)
+	GetTodayBestSellingProduct() (models.BestSellingProduct, error)
 }
 
 type transactionRepository struct {
@@ -106,28 +106,32 @@ func (r *transactionRepository) GetTodayTransactionCount() (int, error) {
 	return count, err
 }
 
-func (r *transactionRepository) GetTodayBestSellingProduct() (string, error) {
+func (r *transactionRepository) GetTodayBestSellingProduct() (models.BestSellingProduct, error) {
 	var productName sql.NullString
+	var totalQty sql.NullInt64
 	today := time.Now().Format("2006-01-02")
 	err := r.db.QueryRow(`
-		SELECT p.nama 
+		SELECT p.nama, SUM(td.quantity) as total_qty
 		FROM transaction_details td
 		JOIN transactions t ON td.transaction_id = t.id
 		JOIN products p ON td.product_id = p.id
 		WHERE DATE(t.created_at) = $1
 		GROUP BY p.id, p.nama
-		ORDER BY SUM(td.quantity) DESC
+		ORDER BY total_qty DESC
 		LIMIT 1
-	`, today).Scan(&productName)
+	`, today).Scan(&productName, &totalQty)
 	
 	if err == sql.ErrNoRows {
-		return "-", nil
+		return models.BestSellingProduct{Nama: "-", QtyTerjual: 0}, nil
 	}
 	if err != nil {
-		return "", err
+		return models.BestSellingProduct{}, err
 	}
 	if !productName.Valid {
-		return "-", nil
+		return models.BestSellingProduct{Nama: "-", QtyTerjual: 0}, nil
 	}
-	return productName.String, nil
+	return models.BestSellingProduct{
+		Nama:       productName.String,
+		QtyTerjual: int(totalQty.Int64),
+	}, nil
 }
