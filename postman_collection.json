@@ -2,7 +2,7 @@
     "info": {
         "_postman_id": "b3e3e4a1-1234-5678-9abc-def123456789",
         "name": "Category & Produk API Golang",
-        "description": "Collection for testing Category and Produk API with Native Go",
+        "description": "Collection for testing Category, Produk, Transaction, and Report API with Native Go",
         "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
     },
     "variable": [
@@ -18,6 +18,11 @@
         },
         {
             "key": "produk_id",
+            "value": "",
+            "type": "string"
+        },
+        {
+            "key": "transaction_id",
             "value": "",
             "type": "string"
         }
@@ -211,6 +216,30 @@
                     }
                 },
                 {
+                    "name": "Search Produk by Name",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{base_url}}/api/produk?name=Kopi",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "produk"
+                            ],
+                            "query": [
+                                {
+                                    "key": "name",
+                                    "value": "Kopi",
+                                    "description": "Search product by name (case-insensitive)"
+                                }
+                            ]
+                        }
+                    }
+                },
+                {
                     "name": "Get Produk by ID",
                     "request": {
                         "method": "GET",
@@ -269,6 +298,125 @@
                                 "api",
                                 "produk",
                                 "{{produk_id}}"
+                            ]
+                        }
+                    }
+                }
+            ]
+        },
+        {
+            "name": "Transactions",
+            "item": [
+                {
+                    "name": "Checkout",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "var jsonData = pm.response.json();",
+                                    "if (jsonData.transaction && jsonData.transaction.id) {",
+                                    "    pm.collectionVariables.set(\"transaction_id\", jsonData.transaction.id);",
+                                    "    console.log(\"Saved transaction ID:\", jsonData.transaction.id);",
+                                    "}"
+                                ],
+                                "type": "text/javascript"
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "POST",
+                        "header": [],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"items\": [\n        {\n            \"product_id\": 1,\n            \"quantity\": 2\n        },\n        {\n            \"product_id\": 2,\n            \"quantity\": 1\n        }\n    ]\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/api/checkout",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "checkout"
+                            ]
+                        },
+                        "description": "Create a new transaction/checkout. Automatically updates product stock."
+                    }
+                },
+                {
+                    "name": "Checkout Single Item",
+                    "request": {
+                        "method": "POST",
+                        "header": [],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"items\": [\n        {\n            \"product_id\": 1,\n            \"quantity\": 1\n        }\n    ]\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/api/checkout",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "checkout"
+                            ]
+                        },
+                        "description": "Checkout with a single item"
+                    }
+                }
+            ]
+        },
+        {
+            "name": "Reports",
+            "item": [
+                {
+                    "name": "Get Daily Report",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{base_url}}/api/report/hari-ini",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "report",
+                                "hari-ini"
+                            ]
+                        },
+                        "description": "Get today's sales report including total revenue, transaction count, and best-selling product"
+                    }
+                }
+            ]
+        },
+        {
+            "name": "Health",
+            "item": [
+                {
+                    "name": "Health Check",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{base_url}}/health",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "health"
                             ]
                         }
                     }

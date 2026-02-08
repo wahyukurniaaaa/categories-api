@@ -6,7 +6,7 @@ import (
 )
 
 type ProductRepository interface {
-	GetAll() ([]models.Produk, error)
+	GetAll(name string) ([]models.Produk, error)
 	GetByID(id int) (models.Produk, error)
 	Create(p models.Produk) (models.Produk, error)
 	Update(id int, p models.Produk) (models.Produk, error)
@@ -21,8 +21,17 @@ func NewProductRepository(db *sql.DB) ProductRepository {
 	return &productRepository{db}
 }
 
-func (r *productRepository) GetAll() ([]models.Produk, error) {
-	rows, err := r.db.Query("SELECT id, nama, harga, stok FROM products")
+func (r *productRepository) GetAll(name string) ([]models.Produk, error) {
+	var rows *sql.Rows
+	var err error
+
+	if name != "" {
+		// Search by name using ILIKE for case-insensitive matching
+		rows, err = r.db.Query("SELECT id, nama, harga, stok FROM products WHERE nama ILIKE '%' || $1 || '%'", name)
+	} else {
+		rows, err = r.db.Query("SELECT id, nama, harga, stok FROM products")
+	}
+
 	if err != nil {
 		return nil, err
 	}

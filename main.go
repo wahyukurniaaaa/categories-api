@@ -1,14 +1,14 @@
 package main
 
 import (
-	"database/sql"
-	"log"
-	"net/http"
 	"category-api/config"
 	"category-api/database"
 	"category-api/handlers"
 	"category-api/repositories"
 	"category-api/services"
+	"database/sql"
+	"log"
+	"net/http"
 )
 
 func main() {
@@ -26,14 +26,19 @@ func main() {
 	// Repositories
 	productRepo := repositories.NewProductRepository(db)
 	categoryRepo := repositories.NewCategoryRepository(db)
+	transactionRepo := repositories.NewTransactionRepository(db)
 
 	// Services
 	productService := services.NewProductService(productRepo)
 	categoryService := services.NewCategoryService(categoryRepo)
+	transactionService := services.NewTransactionService(transactionRepo, productRepo)
+	reportService := services.NewReportService(transactionRepo)
 
 	// Handlers
 	productHandler := handlers.NewProductHandler(productService)
 	categoryHandler := handlers.NewCategoryHandler(categoryService)
+	transactionHandler := handlers.NewTransactionHandler(transactionService)
+	reportHandler := handlers.NewReportHandler(reportService)
 
 	// 4. Setup Routing
 	http.HandleFunc("/api/categories", categoryHandler.ServeHTTP)
@@ -41,6 +46,12 @@ func main() {
 
 	http.HandleFunc("/api/produk", productHandler.ServeHTTP)
 	http.HandleFunc("/api/produk/", productHandler.ServeHTTP)
+
+	// Transaction (Checkout)
+	http.HandleFunc("/api/checkout", transactionHandler.ServeHTTP)
+
+	// Report
+	http.HandleFunc("/api/report/hari-ini", reportHandler.ServeHTTP)
 
 	// Health Check
 	http.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
@@ -86,4 +97,3 @@ func createTables(db *sql.DB) {
 	}
 	log.Println("Database tables initialized")
 }
-

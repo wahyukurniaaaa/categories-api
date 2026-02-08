@@ -57,7 +57,10 @@ func (h *ProductHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *ProductHandler) getAllProduk(w http.ResponseWriter, r *http.Request) {
-	products, err := h.service.GetAll()
+	// Get name query parameter for search
+	name := r.URL.Query().Get("name")
+	
+	products, err := h.service.GetAll(name)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
