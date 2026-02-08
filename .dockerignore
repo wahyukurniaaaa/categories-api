@@ -1,0 +1,48 @@
+# Git
+.git
+.gitignore
+.github
+
+# Documentation
+*.md
+!README.md
+
+# Development files
+.DS_Store
+.env.example
+.vscode
+.idea
+
+# Test files
+*_test.go
+api_test.go
+
+# Build artifacts
+app
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test binary
+*.test
+
+# Output of the go coverage tool
+*.out
+
+# Dependency directories
+vendor/
+
+# Go workspace file
+go.work
+
+# Scripts (tidak perlu di dalam image)
+build-docker.sh
+push-docker.sh
+
+# Postman collection
+postman_collection.json
+
+# JSON data files (jika tidak diperlukan di production)
+categories.json
