@@ -13,6 +13,6 @@ WORKDIR /app
 # Ambil hanya file binary hasil build 
 COPY --from=builder /app/main .
 # Jika ada folder static atau .env, copy juga di sini
-# COPY --from=builder /app/.env .
+# COPY --from=builder /app/.env.
 EXPOSE 8080
 CMD ["./main"]
